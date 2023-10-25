@@ -198,14 +198,14 @@ class Config(object):
         self.tables.read_env('MBSLAVE_')
         self.schemas.read_env('MBSLAVE_')
 
-    def connect_db(self, set_search_path=False, superuser=False, no_db=False):
+    def connect_db(self, set_search_path=False, superuser=False, no_db=False) -> psycopg2.extensions.connection:
         db = psycopg2.connect(**self.database.create_psycopg2_kwargs(superuser=superuser, no_db=no_db))
         if set_search_path:
             db.cursor().execute("SET search_path TO %s", (self.schemas.name('musicbrainz'),))
         return db
 
 
-def connect_db(cfg, set_search_path=False, superuser=False, no_db=False):
+def connect_db(cfg: Config, set_search_path=False, superuser=False, no_db=False):
     return cfg.connect_db(set_search_path=set_search_path, superuser=superuser, no_db=no_db)
 
 
@@ -231,7 +231,7 @@ def check_table_exists(db, schema, table):
     return True
 
 
-def load_tar(source: str, fileobj: BytesIO, db, config, ignored_schemas, ignored_tables):
+def load_tar(source: str, fileobj: BytesIO, db: psycopg2.extensions.connection, config, ignored_schemas, ignored_tables):
     logger.info("Importing data from %s", source)
     tar = tarfile.open(fileobj=fileobj, mode='r|*')
     cursor = db.cursor()
@@ -259,7 +259,7 @@ def load_tar(source: str, fileobj: BytesIO, db, config, ignored_schemas, ignored
         db.commit()
 
 
-def mbslave_import_main(config, args):
+def mbslave_import_main(config: Config, args):
     db = connect_db(config, superuser=True, set_search_path=False)
     cursor = db.cursor()
     logger.info("disabling indexes and triggers")
