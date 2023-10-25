@@ -260,8 +260,12 @@ def load_tar(source: str, fileobj: BytesIO, db, config, ignored_schemas, ignored
 
 
 def mbslave_import_main(config, args):
-    db = config.database.connect_db(superuser=True, set_search_path=False)
-
+    db = connect_db(config, superuser=True, set_search_path=False)
+    cursor = db.cursor()
+    logger.info("disabling indexes and triggers")
+    cursor.execute("SET session_replication_role TO replica")
+    cursor.execute("UPDATE pg_index SET indisready = false where CAST(indrelid::regclass AS text) NOT LIKE 'pg_%'")
+    db.commit()
     for source in args.sources:
         with ExitStack() as exit_stack:
             if source.startswith('http://') or source.startswith('https://'):
@@ -269,6 +273,13 @@ def mbslave_import_main(config, args):
             else:
                 fileobj = exit_stack.enter_context(open(source, 'rb'))
             load_tar(source, fileobj, db, config, config.schemas.ignored_schemas, config.tables.ignored_tables)
+    logger.info("re-enabling indexes and triggers")
+    cursor.execute("SET session_replication_role TO DEFAULT")
+    cursor.execute("UPDATE pg_index SET indisready = true where CAST(indrelid::regclass AS text) NOT LIKE 'pg_%'")
+    db.commit()
+    logger.info("re-indexing")
+    db.set_session(autocommit = True)
+    cursor.execute(f"REINDEX DATABASE {config.database.name}")
 
 
 def mbslave_auto_import_main(config: Config, args) -> None:
